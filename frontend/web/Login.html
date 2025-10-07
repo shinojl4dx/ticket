@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login Page</title>
+  <style>
+    body {
+      font-family: Arial;
+      background-color: #f4f4f4;
+      text-align: center;
+      margin-top: 100px;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      display: inline-block;
+    }
+    input {
+      margin: 10px;
+      padding: 8px;
+      width: 200px;
+    }
+    button {
+      padding: 8px 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>User Login</h2>
+    <form id="loginForm">
+      <input type="text" id="username" placeholder="Username" required><br>
+      <input type="password" id="password" placeholder="Password" required><br>
+      <button type="submit">Login</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const response = await fetch('/api/login', {  // <-- proxy path
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })  // <-- match backend keys
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+          window.location.href = "Dashboard.html";
+        } else {
+          window.location.href = "Auth_Failure.html";
+        }
+
+      } catch (err) {
+        alert('Error connecting to backend');
+        console.error(err);
+      }
+    });
+  </script>
+</body>
+</html>

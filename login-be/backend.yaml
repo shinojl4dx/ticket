@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: login-be
+  namespace: ticket-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: login-be
+  template:
+    metadata:
+      labels:
+        app: login-be
+    spec:
+      containers:
+        - name: login-be
+          image: shinojl4dx/login-be:latest  # replace with your built image
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: login-be-service
+  namespace: ticket-system
+spec:
+  selector:
+    app: login-be
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  # ClusterIP by default → internal only
+
