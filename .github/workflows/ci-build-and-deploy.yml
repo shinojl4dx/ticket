@@ -26,7 +26,6 @@ jobs:
       # ---- FRONTEND ----
       - name: Build and push Frontend image
         uses: docker/build-push-action@v5
-        id: frontend
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
@@ -34,21 +33,9 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ github.sha }}
-
-      - name: Update frontend manifest with SHA tag
-        run: |
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ github.sha }}
-          sed -i "s|image: .*frontend.*|image: $IMAGE|g" ./frontend/frontend.yaml
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add ./frontend/frontend.yaml
-          git commit -m "Update frontend image to $IMAGE" || echo "No changes"
-          git push
-
       # ---- BACKEND ----
       - name: Build and push Backend image
         uses: docker/build-push-action@v5
-        id: backend
         with:
           context: ./login-be
           file: ./login-be/Dockerfile
@@ -56,16 +43,5 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/login-be:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/login-be:${{ github.sha }}
-
-      - name: Update backend manifest with SHA tag
-        run: |
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/login-be:${{ github.sha }}
-          sed -i "s|image: .*login-be.*|image: $IMAGE|g" ./login-be/backend.yaml
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add ./login-be/backend.yaml
-          git commit -m "Update backend image to $IMAGE" || echo "No changes"
-          git push
-
       - name: Show completion message
-        run: echo "✅ Docker images pushed and manifests updated successfully!"
+        run: echo "✅ Docker images pushed successfully to Docker Hub!"
