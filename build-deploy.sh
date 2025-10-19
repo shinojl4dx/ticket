@@ -4,6 +4,7 @@ set -euo pipefail
 # ---------------- CONFIG ----------------
 DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:?Set this env variable}"
 DOCKERHUB_TOKEN="${DOCKERHUB_TOKEN:?Set this env variable}"
+GITOPS_REPO_TOKEN="${GITOPS_REPO_TOKEN:?Set this env variable}"
 CI_DIR=$(pwd)
 CD_REPO="https://github.com/shinojl4dx/ticket-CD.git"
 CD_DIR="/tmp/gitops"
@@ -38,17 +39,18 @@ cd "$CD_DIR"
 # Copy k86 deployment YAMLs from CI repo
 cp -r "$CI_DIR/k86/"* "$CD_DIR/"
 
-# Replace image tags in backend.yaml
+# Update backend image tag
 sed -i "s#image: .*login-be:.*#image: docker.io/$DOCKERHUB_USERNAME/login-be:$GIT_SHA#g" backend.yaml
 
-# Replace image tags in frontend.yaml
+# Update frontend image tag
 sed -i "s#image: .*frontend:.*#image: docker.io/$DOCKERHUB_USERNAME/frontend:$GIT_SHA#g" frontend.yaml
 
-# Commit & push changes to CD repo
+# Commit & push to CD repo using GITOPS_REPO_TOKEN
 git config user.email "ci@example.com"
 git config user.name "ci-bot"
 git add .
 git commit -m "Update Docker images to $GIT_SHA" || echo "No changes to commit"
-git push "$CD_REPO"
+
+git push https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/shinojl4dx/ticket-CD.git HEAD:main
 
 echo "🎉 CD manifests updated. ArgoCD will deploy automatically."
