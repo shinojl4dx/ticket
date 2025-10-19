@@ -1,21 +1,56 @@
-name: CI/CD Pipeline
+#!/bin/bash
+set -e
 
-on:
-  push:
-    branches: [ main ]
+echo "🔧 Setting up..."
+GITOPS_REPO="https://github.com/${GITHUB_ACTOR}/ticket-CD.git"
+GITOPS_DIR="/tmp/gitops"
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+if [ -z "$GITOPS_REPO_TOKEN" ]; then
+  echo "❌ GITOPS_REPO_TOKEN not set"
+  exit 1
+fi
 
-      - name: Run build-deploy script
-        run: |
-          chmod +x build-deploy.sh
-          ./build-deploy.sh
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
+# Login to DockerHub
+echo "🔐 Logging into DockerHub..."
+echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+# Build and push backend
+echo "🚀 Building backend image..."
+cd login-be
+docker build -t $DOCKERHUB_USERNAME/login-be:latest .
+docker push $DOCKERHUB_USERNAME/login-be:latest
+BACKEND_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DOCKERHUB_USERNAME/login-be:latest | cut -d'@' -f2)
+cd ..
+
+# Build and push frontend
+echo "🚀 Building frontend image..."
+cd frontend
+docker build -t $DOCKERHUB_USERNAME/frontend:latest .
+docker push $DOCKERHUB_USERNAME/frontend:latest
+FRONTEND_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DOCKERHUB_USERNAME/frontend:latest | cut -d'@' -f2)
+cd ..
+
+echo "✅ Docker images pushed successfully."
+echo "  - Backend digest:  $BACKEND_DIGEST"
+echo "  - Frontend digest: $FRONTEND_DIGEST"
+
+# Clone GitOps repo
+echo "🔄 Updating CD manifests..."
+git clone https://$GITHUB_ACTOR:$GITOPS_REPO_TOKEN@github.com/$GITHUB_ACTOR/ticket-CD.git $GITOPS_DIR
+
+# Copy and update manifests
+cp k86/*.yaml $GITOPS_DIR/
+
+# Replace image tags with digest-based images
+sed -i "s|shinojl4dx/login-be:latest|$DOCKERHUB_USERNAME/login-be@$BACKEND_DIGEST|g" $GITOPS_DIR/backend.yaml
+sed -i "s|shinojl4dx/frontend:latest|$DOCKERHUB_USERNAME/frontend@$FRONTEND_DIGEST|g" $GITOPS_DIR/frontend.yaml
+
+# Commit and push
+cd $GITOPS_DIR
+git config user.name "github-actions"
+git config user.email "actions@github.com"
+git add .
+git commit -m "Update images to new digests"
+git push origin main
+
+echo "✅ CD manifests updated with image digests."
