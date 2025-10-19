@@ -45,34 +45,37 @@ jobs:
           docker build -t shinojl4dx/login-be:$SHA_TAG ./login-be
           docker push shinojl4dx/login-be:$SHA_TAG
 
-      # 6️⃣ Checkout CD repo
-      - name: Checkout CD repository
+      # 6️⃣ Clone CD repository
+      - name: Clone CD repository
         env:
           GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
         run: |
+          rm -rf $CD_DIR
           git clone https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/shinojl4dx/ticket-CD.git $CD_DIR
           cd $CD_DIR
+          git checkout main
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
 
-      # 7️⃣ Update manifest files with SHA tags
-      - name: Update manifests
+      # 7️⃣ Verify files exist
+      - name: List files in CD repo
+        run: |
+          ls -l $CD_DIR
+
+      # 8️⃣ Update deployment manifests with SHA tags
+      - name: Update manifests with SHA tag
         run: |
           cd $CD_DIR
-          sed -i "s|\(shinojl4dx/frontend:\).*|\1$SHA_TAG|g" frontend-deployment.yaml
-          sed -i "s|\(shinojl4dx/login-be:\).*|\1$SHA_TAG|g" login-be-deployment.yaml
+          if [ ! -f frontend-deployment.yaml ]; then echo "❌ frontend-deployment.yaml not found"; exit 1; fi
+          if [ ! -f login-be-deployment.yaml ]; then echo "❌ login-be-deployment.yaml not found"; exit 1; fi
 
-      # 8️⃣ Commit & push updated manifests
+          sed -i "s|shinojl4dx/frontend:.*|shinojl4dx/frontend:$SHA_TAG|g" frontend-deployment.yaml
+          sed -i "s|shinojl4dx/login-be:.*|shinojl4dx/login-be:$SHA_TAG|g" login-be-deployment.yaml
+
+      # 9️⃣ Commit & push updated manifests
       - name: Commit and push changes
         run: |
           cd $CD_DIR
           git add frontend-deployment.yaml login-be-deployment.yaml
           git commit -m "Update images to $SHA_TAG"
           git push origin main
-
-      # 9️⃣ Optional: trigger ArgoCD sync if needed
-      - name: Trigger ArgoCD sync
-        run: |
-          curl -X POST -k \
-          -H "Authorization: Bearer ${{ secrets.ARGOCD_TOKEN }}" \
-          https://argocd.example.com/api/v1/applications/ticket-app/sync
