@@ -9,51 +9,50 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      IMAGE_NAME: shinojl4dx/frontend
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
+      GITOPS_REPO: https://github.com/shinojl4dx/ticket-CD.git
+      GITOPS_DIR: /tmp/gitops
 
     steps:
-    # 1️⃣ Checkout the code
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    # 2️⃣ Set up Git
-    - name: Set up Git
-      run: |
-        git config --global user.name "${{ github.actor }}"
-        git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+      - name: Set commit SHA
+        id: vars
+        run: echo "COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-    # 3️⃣ Login to Docker Hub
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_PASSWORD }}
+      - name: Log in to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    # 4️⃣ Build Docker image
-    - name: Build Docker image
-      run: |
-        IMAGE_TAG=${GITHUB_SHA::8}
-        echo "Building image $IMAGE_NAME:$IMAGE_TAG"
-        docker build -t $IMAGE_NAME:$IMAGE_TAG .
+      - name: Build and push frontend image
+        run: |
+          docker build -t shinojl4dx/frontend:${COMMIT_SHA} ./frontend
+          docker push shinojl4dx/frontend:${COMMIT_SHA}
 
-    # 5️⃣ Push Docker image
-    - name: Push Docker image
-      run: |
-        IMAGE_TAG=${GITHUB_SHA::8}
-        docker push $IMAGE_NAME:$IMAGE_TAG
+      - name: Build and push login-be image
+        run: |
+          docker build -t shinojl4dx/login-be:${COMMIT_SHA} ./login-be
+          docker push shinojl4dx/login-be:${COMMIT_SHA}
 
-    # 6️⃣ Update Kubernetes manifest with new image SHA
-    - name: Update Kubernetes manifest
-      run: |
-        IMAGE_TAG=${GITHUB_SHA::8}
-        echo "Updating k8s manifest with image tag $IMAGE_TAG"
-        sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:$IMAGE_TAG|g" k8s/frontend-deployment.yaml
+      - name: Clone GitOps repo
+        run: |
+          rm -rf $GITOPS_DIR
+          git clone https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/shinojl4dx/ticket-CD.git $GITOPS_DIR
+          cd $GITOPS_DIR
+          git checkout main
 
-    # 7️⃣ Commit and push manifest change back to repo
-    - name: Commit updated manifest
-      run: |
-        git add k8s/frontend-deployment.yaml
-        git commit -m "Update frontend image to $GITHUB_SHA"
-        git push origin main
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update manifests with new SHA
+        run: |
+          cd $GITOPS_DIR
+          # Replace frontend image
+          sed -i "s|shinojl4dx/frontend:.*|shinojl4dx/frontend:${COMMIT_SHA}|g" frontend-deployment.yaml
+          # Replace login-be image
+          sed -i "s|shinojl4dx/login-be:.*|shinojl4dx/login-be:${COMMIT_SHA}|g" login-be-deployment.yaml
+          git add .
+          git commit -m "Update images to commit ${COMMIT_SHA}"
+          git push origin main
