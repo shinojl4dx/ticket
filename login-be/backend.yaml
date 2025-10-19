@@ -1,35 +1,71 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: login-be
-  namespace: ticket-system
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: login-be
-  template:
-    metadata:
-      labels:
-        app: login-be
-    spec:
-      containers:
-        - name: login-be
-          image: shinojl4dx/login-be:latest  # replace with your built image
-          ports:
-            - containerPort: 8000
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: login-be-service
-  namespace: ticket-system
-spec:
-  selector:
-    app: login-be
-  ports:
-    - protocol: TCP
-      port: 8000
-      targetPort: 8000
-  # ClusterIP by default → internal only
+name: CI/CD Build and Deploy
 
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
+  CD_REPO: https://github.com/shinojl4dx/ticket-CD.git
+  CD_DIR: /tmp/gitops
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+
+    # 1️⃣ Checkout CI repo
+    - name: Checkout CI repo
+      uses: actions/checkout@v3
+
+    # 2️⃣ Set SHA tag
+    - name: Set SHA tag
+      id: vars
+      run: echo "SHA_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+    # 3️⃣ Login to DockerHub
+    - name: Docker login
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    # 4️⃣ Build & push frontend image
+    - name: Build & push frontend Docker image
+      run: |
+        docker build -t shinojl4dx/frontend:${SHA_TAG} ./frontend
+        docker push shinojl4dx/frontend:${SHA_TAG}
+
+    # 5️⃣ Build & push backend image
+    - name: Build & push login-be Docker image
+      run: |
+        docker build -t shinojl4dx/login-be:${SHA_TAG} ./login-be
+        docker push shinojl4dx/login-be:${SHA_TAG}
+
+    # 6️⃣ Clone CD repo
+    - name: Clone CD repo
+      run: |
+        git clone https://${{ secrets.GITOPS_REPO_TOKEN }}@github.com/shinojl4dx/ticket-CD.git $CD_DIR
+        cd $CD_DIR
+        git config user.email "ci-bot@github.com"
+        git config user.name "CI Bot"
+
+    # 7️⃣ Update manifests with new SHA tag
+    - name: Update manifests with SHA tag
+      run: |
+        cd $CD_DIR
+        if [ ! -f frontend.yaml ]; then echo "❌ frontend.yaml not found"; exit 1; fi
+        if [ ! -f backend.yaml ]; then echo "❌ backend.yaml not found"; exit 1; fi
+        sed -i "s|shinojl4dx/frontend:.*|shinojl4dx/frontend:${SHA_TAG}|g" frontend.yaml
+        sed -i "s|shinojl4dx/login-be:.*|shinojl4dx/login-be:${SHA_TAG}|g" backend.yaml
+
+    # 8️⃣ Commit and push changes to CD repo
+    - name: Commit and push CD repo changes
+      run: |
+        cd $CD_DIR
+        git add frontend.yaml backend.yaml
+        git commit -m "Update image tags to ${SHA_TAG} [ci skip]" || echo "No changes to commit"
+        git push origin main
