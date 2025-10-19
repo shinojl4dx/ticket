@@ -4,58 +4,74 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+env:
+  CD_DIR: /tmp/gitops
+  SHA_TAG: ${{ github.sha }}
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
-    env:
-      FRONTEND_IMAGE: shinojl4dx/frontend
-      LOGIN_BE_IMAGE: shinojl4dx/login-be
-      CD_REPO: https://github.com/shinojl4dx/ticket-CD.git
-      CD_DIR: /tmp/gitops
-
     steps:
-      - name: Checkout CI repo
+      # 1. Checkout the CI repo
+      - name: Checkout CI repository
         uses: actions/checkout@v3
 
-      - name: Set commit SHA
-        id: vars
-        run: echo "SHA_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      # 2. Set up Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
+      # 3. Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # 4. Build and push frontend image
       - name: Build and push frontend image
         run: |
-          docker build -t $FRONTEND_IMAGE:$SHA_TAG ./frontend
-          docker push $FRONTEND_IMAGE:$SHA_TAG
+          docker build -t shinojl4dx/frontend:$SHA_TAG ./frontend
+          docker push shinojl4dx/frontend:$SHA_TAG
 
+      # 5. Build and push login-be image
       - name: Build and push login-be image
         run: |
-          docker build -t $LOGIN_BE_IMAGE:$SHA_TAG ./login-be
-          docker push $LOGIN_BE_IMAGE:$SHA_TAG
+          docker build -t shinojl4dx/login-be:$SHA_TAG ./login-be
+          docker push shinojl4dx/login-be:$SHA_TAG
 
-      - name: Clone CD repo
+      # 6. Clone CD repo
+      - name: Clone CD repository
         run: |
           git clone https://x-access-token:${{ secrets.GITOPS_REPO_TOKEN }}@github.com/shinojl4dx/ticket-CD.git $CD_DIR
           cd $CD_DIR
           git checkout main
 
+      # 7. Configure Git user for commits
+      - name: Configure Git user
+        run: |
+          cd $CD_DIR
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+      # 8. Update manifests with new SHA tag
       - name: Update manifests with SHA tag
         run: |
           cd $CD_DIR
           # Frontend manifest
           if [ -f frontend-deployment.yaml ]; then
-            sed -i "s|\($FRONTEND_IMAGE:\).*|\1$SHA_TAG|g" frontend-deployment.yaml
+            sed -i "s|\(shinojl4dx/frontend:\).*|\1$SHA_TAG|g" frontend-deployment.yaml
           fi
           # Login-be manifest
           if [ -f login-be-deployment.yaml ]; then
-            sed -i "s|\($LOGIN_BE_IMAGE:\).*|\1$SHA_TAG|g" login-be-deployment.yaml
+            sed -i "s|\(shinojl4dx/login-be:\).*|\1$SHA_TAG|g" login-be-deployment.yaml
           fi
+
+      # 9. Commit and push changes to CD repo
+      - name: Commit and push changes
+        run: |
+          cd $CD_DIR
           git add .
-          git commit -m "Update images to SHA $SHA_TAG"
+          git commit -m "Update images to SHA $SHA_TAG" || echo "No changes to commit"
           git push origin main
