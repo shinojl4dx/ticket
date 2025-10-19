@@ -1,87 +1,54 @@
-name: CI Build and Update CD Manifests
+#!/bin/bash
+set -euo pipefail
 
-on:
-  push:
-    branches: [ main ]
+# ---------------- CONFIG ----------------
+DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:?Set this env variable}"
+DOCKERHUB_TOKEN="${DOCKERHUB_TOKEN:?Set this env variable}"
+CI_DIR=$(pwd)
+CD_REPO="https://github.com/shinojl4dx/ticket-CD.git"
+CD_DIR="/tmp/gitops"
+GIT_SHA=$(git rev-parse --short HEAD)
 
-jobs:
-  build-and-update-cd:
-    runs-on: ubuntu-latest
-    steps:
-      # -------- Checkout source --------
-      - name: Checkout source
-        uses: actions/checkout@v4
+# ---------------- DOCKER LOGIN ----------------
+echo "🔐 Logging into Docker Hub..."
+echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 
-      # -------- Docker Hub Login --------
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+# ---------------- BUILD & PUSH FRONTEND ----------------
+echo "📦 Building and pushing frontend..."
+docker build -t "$DOCKERHUB_USERNAME/frontend:latest" ./frontend
+docker push "$DOCKERHUB_USERNAME/frontend:latest"
+docker tag "$DOCKERHUB_USERNAME/frontend:latest" "$DOCKERHUB_USERNAME/frontend:$GIT_SHA"
+docker push "$DOCKERHUB_USERNAME/frontend:$GIT_SHA"
 
-      # -------- Build & Push Frontend --------
-      - name: Build and push Frontend image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest ./frontend
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${GITHUB_SHA}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${GITHUB_SHA}
+# ---------------- BUILD & PUSH BACKEND ----------------
+echo "📦 Building and pushing backend..."
+docker build -t "$DOCKERHUB_USERNAME/login-be:latest" ./login-be
+docker push "$DOCKERHUB_USERNAME/login-be:latest"
+docker tag "$DOCKERHUB_USERNAME/login-be:latest" "$DOCKERHUB_USERNAME/login-be:$GIT_SHA"
+docker push "$DOCKERHUB_USERNAME/login-be:$GIT_SHA"
 
-      # -------- Build & Push Backend --------
-      - name: Build and push Backend image
-        run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/login-be:latest ./login-be
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/login-be:latest
-          docker tag ${{ secrets.DOCKERHUB_USERNAME }}/login-be:latest ${{ secrets.DOCKERHUB_USERNAME }}/login-be:${GITHUB_SHA}
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/login-be:${GITHUB_SHA}
+echo "✅ Docker images pushed successfully."
 
-      # -------- Update CD Manifests --------
-      - name: Update GitOps CD manifests
-        run: |
-          echo "🔄 Updating CD manifests with latest image SHA..."
-          GIT_SHA=${GITHUB_SHA}
-          DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+# ---------------- UPDATE CD MANIFESTS ----------------
+echo "🔄 Updating CD manifests with latest SHA..."
+rm -rf "$CD_DIR"
+git clone "$CD_REPO" "$CD_DIR"
+cd "$CD_DIR"
 
-          # Clone the GitOps repo
-          git clone https://github.com/shinojl4dx/ticket-CD.git /tmp/gitops
-          cd /tmp/gitops/apps/ticket-app
+# Copy k86 deployment YAMLs from CI repo
+cp -r "$CI_DIR/k86/"* "$CD_DIR/"
 
-          # Create backend deployment manifest
-          cat > backend-deployment.yaml <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: login-be
-spec:
-  replicas: 1
-  template:
-    spec:
-      containers:
-        - name: login-be
-          image: docker.io/$DOCKERHUB_USERNAME/login-be:$GIT_SHA
-EOF
+# Replace image tags in backend.yaml
+sed -i "s#image: .*login-be:.*#image: docker.io/$DOCKERHUB_USERNAME/login-be:$GIT_SHA#g" backend.yaml
 
-          # Create frontend deployment manifest
-          cat > frontend-deployment.yaml <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: frontend
-spec:
-  replicas: 1
-  template:
-    spec:
-      containers:
-        - name: frontend
-          image: docker.io/$DOCKERHUB_USERNAME/frontend:$GIT_SHA
-EOF
+# Replace image tags in frontend.yaml
+sed -i "s#image: .*frontend:.*#image: docker.io/$DOCKERHUB_USERNAME/frontend:$GIT_SHA#g" frontend.yaml
 
-          # Commit & push changes
-          git config user.email "github-actions@github.com"
-          git config user.name "github-actions"
-          git add .
-          git commit -m "Update Docker images to $GIT_SHA" || echo "No changes to commit"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/shinojl4dx/ticket-CD.git HEAD:main
+# Commit & push changes to CD repo
+git config user.email "ci@example.com"
+git config user.name "ci-bot"
+git add .
+git commit -m "Update Docker images to $GIT_SHA" || echo "No changes to commit"
+git push "$CD_REPO"
 
-      - name: Done
-        run: echo "✅ CI complete, CD manifests updated. ArgoCD will deploy automatically."
+echo "🎉 CD manifests updated. ArgoCD will deploy automatically."
