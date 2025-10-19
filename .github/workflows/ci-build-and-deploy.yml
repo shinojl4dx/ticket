@@ -1,38 +1,25 @@
-#!/bin/bash
-set -e
+name: CI Build and Push to Docker Hub
 
-# Read secrets from GitHub Actions env
-DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:?Missing DockerHub username}"
-DOCKERHUB_TOKEN="${DOCKERHUB_TOKEN:?Missing DockerHub token}"
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
-# Get current Git commit SHA
-GIT_SHA=$(git rev-parse HEAD)
+jobs:
+  build-and-push:
+    runs-on: self-hosted
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-echo "🔐 Logging into Docker Hub..."
-echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-echo "🔨 Setting up Docker Buildx..."
-docker buildx create --use --name multi-builder || echo "Buildx instance already exists"
-docker buildx use multi-builder
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-# Frontend image
-echo "📦 Building and pushing Frontend..."
-docker buildx build \
-  --platform linux/amd64 \
-  --file ./frontend/Dockerfile \
-  --tag "$DOCKERHUB_USERNAME/frontend:latest" \
-  --tag "$DOCKERHUB_USERNAME/frontend:$GIT_SHA" \
-  --push \
-  ./frontend
-
-# Backend image
-echo "📦 Building and pushing Backend..."
-docker buildx build \
-  --platform linux/amd64 \
-  --file ./login-be/Dockerfile \
-  --tag "$DOCKERHUB_USERNAME/login-be:latest" \
-  --tag "$DOCKERHUB_USERNAME/login-be:$GIT_SHA" \
-  --push \
-  ./login-be
-
-echo "✅ Done: Docker images pushed to Docker Hub!"
+      - name: Run build and push script
+        run: |
+          chmod +x ./build-and-push.sh
+          ./build-and-push.sh
