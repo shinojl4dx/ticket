@@ -1,4 +1,4 @@
-name: CI/CD Build and Deploy
+name: CI Build and Deploy
 
 on:
   push:
@@ -9,52 +9,42 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    env:
-      IMAGE_NAME: shinojl4dx/frontend
-      KUBE_MANIFEST: k8s/frontend.yaml
-      GITOPS_REPO: https://github.com/${{ github.actor }}/ticket-CD.git
-      GITOPS_DIR: /tmp/gitops
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-    - name: Build & Tag Docker image with SHA
-      id: docker_build
-      run: |
-        set -e
-        SHORT_SHA=$(git rev-parse --short HEAD)
-        echo "🔧 Building Docker image with tag $SHORT_SHA..."
-        docker build -t $IMAGE_NAME:$SHORT_SHA .
-        docker push $IMAGE_NAME:$SHORT_SHA
-        echo "IMAGE_TAG=$SHORT_SHA" >> $GITHUB_ENV
-        echo "✅ Image pushed: $IMAGE_NAME:$SHORT_SHA"
+      - name: Set image SHA
+        run: |
+          IMAGE_TAG=$(git rev-parse --short HEAD)
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
 
-    - name: Update Kubernetes manifest with SHA tag
-      run: |
-        echo "🔧 Updating manifest $KUBE_MANIFEST..."
-        sed -i "s|image: $IMAGE_NAME:.*|image: $IMAGE_NAME:${IMAGE_TAG}|" $KUBE_MANIFEST
-        git config user.name "github-actions"
-        git config user.email "actions@github.com"
-        git add $KUBE_MANIFEST
-        git commit -m "ci: update frontend image to $IMAGE_NAME:${IMAGE_TAG}" || echo "No changes to commit"
-        git push origin main
+      - name: Build Docker image
+        run: |
+          docker build -t shinojl4dx/frontend:${IMAGE_TAG} .
 
-    - name: Sync GitOps repo (optional)
-      run: |
-        echo "🔧 Cloning GitOps repo..."
-        git clone https://x-access-token:${{ secrets.GITOPS_REPO_TOKEN }}@github.com/${{ github.actor }}/ticket-CD.git $GITOPS_DIR
-        cp $KUBE_MANIFEST $GITOPS_DIR/
-        cd $GITOPS_DIR
-        git add .
-        git commit -m "ci: update frontend image to $IMAGE_NAME:${IMAGE_TAG}" || echo "No changes"
-        git push origin main
+      - name: Push Docker image
+        run: |
+          docker push shinojl4dx/frontend:${IMAGE_TAG}
+
+      - name: Clone GitOps repo
+        run: |
+          git clone https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/${GITHUB_ACTOR}/ticket-CD.git /tmp/gitops
+
+      - name: Update Kubernetes manifest
+        run: |
+          sed -i "s|PLACEHOLDER_SHA|${IMAGE_TAG}|g" /tmp/gitops/k8s/frontend-deployment.yaml
+          cd /tmp/gitops
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git add k8s/frontend-deployment.yaml
+          git commit -m "ci: update frontend image to SHA ${IMAGE_TAG}"
+          git push
