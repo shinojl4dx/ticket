@@ -1,56 +1,66 @@
 #!/bin/bash
 set -e
 
-echo "🔧 Setting up..."
+echo "🔧 Starting CI/CD build and deployment..."
+
+# Variables
+DOCKERHUB_USER="${DOCKERHUB_USERNAME}"
+DOCKERHUB_PASS="${DOCKERHUB_TOKEN}"
 GITOPS_REPO="https://github.com/${GITHUB_ACTOR}/ticket-CD.git"
 GITOPS_DIR="/tmp/gitops"
 
 if [ -z "$GITOPS_REPO_TOKEN" ]; then
-  echo "❌ GITOPS_REPO_TOKEN not set"
+  echo "❌ GITOPS_REPO_TOKEN not set. Exiting."
   exit 1
 fi
 
-# Login to DockerHub
-echo "🔐 Logging into DockerHub..."
-echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+# Docker login
+echo "🔑 Logging in to Docker Hub..."
+echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
 
 # Build and push backend
-echo "🚀 Building backend image..."
-cd login-be
-docker build -t $DOCKERHUB_USERNAME/login-be:latest .
-docker push $DOCKERHUB_USERNAME/login-be:latest
-BACKEND_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DOCKERHUB_USERNAME/login-be:latest | cut -d'@' -f2)
-cd ..
+echo "🐳 Building backend image..."
+docker build -t $DOCKERHUB_USER/login-be:latest ./login-be
+docker push $DOCKERHUB_USER/login-be:latest
 
 # Build and push frontend
-echo "🚀 Building frontend image..."
-cd frontend
-docker build -t $DOCKERHUB_USERNAME/frontend:latest .
-docker push $DOCKERHUB_USERNAME/frontend:latest
-FRONTEND_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DOCKERHUB_USERNAME/frontend:latest | cut -d'@' -f2)
-cd ..
+echo "🐳 Building frontend image..."
+docker build -t $DOCKERHUB_USER/frontend:latest ./frontend
+docker push $DOCKERHUB_USER/frontend:latest
 
 echo "✅ Docker images pushed successfully."
-echo "  - Backend digest:  $BACKEND_DIGEST"
-echo "  - Frontend digest: $FRONTEND_DIGEST"
 
-# Clone GitOps repo
-echo "🔄 Updating CD manifests..."
-git clone https://$GITHUB_ACTOR:$GITOPS_REPO_TOKEN@github.com/$GITHUB_ACTOR/ticket-CD.git $GITOPS_DIR
+# ==========================================================
+# UPDATE MANIFEST FILES WITH LATEST DIGESTS
+# ==========================================================
+echo "🔄 Updating CD manifests with image SHAs..."
 
-# Copy and update manifests
-cp k86/*.yaml $GITOPS_DIR/
+BACKEND_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DOCKERHUB_USER/login-be:latest | cut -d'@' -f2)
+FRONTEND_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $DOCKERHUB_USER/frontend:latest | cut -d'@' -f2)
 
-# Replace image tags with digest-based images
-sed -i "s|shinojl4dx/login-be:latest|$DOCKERHUB_USERNAME/login-be@$BACKEND_DIGEST|g" $GITOPS_DIR/backend.yaml
-sed -i "s|shinojl4dx/frontend:latest|$DOCKERHUB_USERNAME/frontend@$FRONTEND_DIGEST|g" $GITOPS_DIR/frontend.yaml
+sed -i "s|$DOCKERHUB_USER/login-be:.*|$DOCKERHUB_USER/login-be@$BACKEND_DIGEST|g" k86/backend.yaml
+sed -i "s|$DOCKERHUB_USER/frontend:.*|$DOCKERHUB_USER/frontend@$FRONTEND_DIGEST|g" k86/frontend.yaml
 
-# Commit and push
+echo "✅ Updated manifests:"
+grep "image:" k86/*.yaml
+
+# ==========================================================
+# PUSH UPDATED MANIFESTS TO CD REPOSITORY
+# ==========================================================
+echo "🚀 Pushing manifests to GitOps/CD repository..."
+
+rm -rf $GITOPS_DIR
+git clone "https://${GITOPS_REPO_TOKEN}@github.com/${GITHUB_ACTOR}/ticket-CD.git" $GITOPS_DIR
+
+cp -r k86/* $GITOPS_DIR/
+
 cd $GITOPS_DIR
-git config user.name "github-actions"
-git config user.email "actions@github.com"
+git config user.name "github-actions[bot]"
+git config user.email "github-actions[bot]@users.noreply.github.com"
+
 git add .
-git commit -m "Update images to new digests"
+git commit -m "Update manifests with new image SHAs on $(date '+%Y-%m-%d %H:%M:%S')" || echo "No changes to commit"
 git push origin main
 
-echo "✅ CD manifests updated with image digests."
+echo "✅ CD manifests pushed successfully."
+echo "🎯 ArgoCD will detect the new commit and redeploy automatically if auto-sync is enabled."
