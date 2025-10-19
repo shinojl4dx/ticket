@@ -1,4 +1,4 @@
-name: CI Build and Push to Docker Hub
+name: CI Build, Push and Deploy via ArgoCD
 
 on:
   push:
@@ -6,20 +6,23 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-push:
+  build-push-deploy:
     runs-on: self-hosted
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      GITOPS_REPO: https://github.com/shinojl4dx/ticket-CD.git
+      GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }} # Add this secret (PAT)
+      GITOPS_REPO_BRANCH: main
 
     steps:
-      - name: Checkout source
+      - name: Checkout source code
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Run build and push script
+      - name: Run build and deploy script
         run: |
           chmod +x ./build-and-push.sh
           ./build-and-push.sh
