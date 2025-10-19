@@ -8,22 +8,22 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
-      GITOPS_REPO: https://github.com/shinojl4dx/ticket-CD.git
-      GITOPS_DIR: /tmp/gitops
+      FRONTEND_IMAGE: shinojl4dx/frontend
+      LOGIN_BE_IMAGE: shinojl4dx/login-be
+      CD_REPO: https://github.com/shinojl4dx/ticket-CD.git
+      CD_DIR: /tmp/gitops
 
     steps:
-      - name: Checkout code
+      - name: Checkout CI repo
         uses: actions/checkout@v3
 
       - name: Set commit SHA
         id: vars
-        run: echo "COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        run: echo "SHA_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      - name: Log in to DockerHub
+      - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -31,28 +31,31 @@ jobs:
 
       - name: Build and push frontend image
         run: |
-          docker build -t shinojl4dx/frontend:${COMMIT_SHA} ./frontend
-          docker push shinojl4dx/frontend:${COMMIT_SHA}
+          docker build -t $FRONTEND_IMAGE:$SHA_TAG ./frontend
+          docker push $FRONTEND_IMAGE:$SHA_TAG
 
       - name: Build and push login-be image
         run: |
-          docker build -t shinojl4dx/login-be:${COMMIT_SHA} ./login-be
-          docker push shinojl4dx/login-be:${COMMIT_SHA}
+          docker build -t $LOGIN_BE_IMAGE:$SHA_TAG ./login-be
+          docker push $LOGIN_BE_IMAGE:$SHA_TAG
 
-      - name: Clone GitOps repo
+      - name: Clone CD repo
         run: |
-          rm -rf $GITOPS_DIR
-          git clone https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/shinojl4dx/ticket-CD.git $GITOPS_DIR
-          cd $GITOPS_DIR
+          git clone https://x-access-token:${{ secrets.GITOPS_REPO_TOKEN }}@github.com/shinojl4dx/ticket-CD.git $CD_DIR
+          cd $CD_DIR
           git checkout main
 
-      - name: Update manifests with new SHA
+      - name: Update manifests with SHA tag
         run: |
-          cd $GITOPS_DIR
-          # Replace frontend image
-          sed -i "s|shinojl4dx/frontend:.*|shinojl4dx/frontend:${COMMIT_SHA}|g" frontend-deployment.yaml
-          # Replace login-be image
-          sed -i "s|shinojl4dx/login-be:.*|shinojl4dx/login-be:${COMMIT_SHA}|g" login-be-deployment.yaml
+          cd $CD_DIR
+          # Frontend manifest
+          if [ -f frontend-deployment.yaml ]; then
+            sed -i "s|\($FRONTEND_IMAGE:\).*|\1$SHA_TAG|g" frontend-deployment.yaml
+          fi
+          # Login-be manifest
+          if [ -f login-be-deployment.yaml ]; then
+            sed -i "s|\($LOGIN_BE_IMAGE:\).*|\1$SHA_TAG|g" login-be-deployment.yaml
+          fi
           git add .
-          git commit -m "Update images to commit ${COMMIT_SHA}"
+          git commit -m "Update images to SHA $SHA_TAG"
           git push origin main
