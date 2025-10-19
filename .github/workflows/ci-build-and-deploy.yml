@@ -1,4 +1,4 @@
-name: CI/CD Build & Deploy
+name: CI/CD Build and Deploy
 
 on:
   push:
@@ -6,76 +6,63 @@ on:
       - main
 
 env:
-  CI_REPO: ${{ github.repository }}
+  CI_REPO: https://github.com/shinojl4dx/ticket-CI.git
   CD_REPO: https://github.com/shinojl4dx/ticket-CD.git
   CD_DIR: /tmp/gitops
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
       # 1️⃣ Checkout CI repo
       - name: Checkout CI repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Set up Docker login
-      - name: Log in to Docker Hub
+      # 2️⃣ Set SHA tag
+      - name: Set SHA_TAG
+        id: vars
+        run: echo "SHA_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      # 3️⃣ Log in to Docker Hub
+      - name: Docker Login
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 3️⃣ Compute SHA tag for the commit
-      - name: Set image tag
-        id: vars
+      # 4️⃣ Build and push frontend image
+      - name: Build and Push Frontend Image
         run: |
-          SHA_TAG=$(git rev-parse --short HEAD)
-          echo "SHA_TAG=$SHA_TAG" >> $GITHUB_ENV
+          docker build -t shinojl4dx/frontend:${SHA_TAG} ./frontend
+          docker push shinojl4dx/frontend:${SHA_TAG}
 
-      # 4️⃣ Build & push frontend image
-      - name: Build & push frontend image
+      # 5️⃣ Build and push login-be image
+      - name: Build and Push Login-BE Image
         run: |
-          docker build -t shinojl4dx/frontend:$SHA_TAG ./frontend
-          docker push shinojl4dx/frontend:$SHA_TAG
+          docker build -t shinojl4dx/login-be:${SHA_TAG} ./login-be
+          docker push shinojl4dx/login-be:${SHA_TAG}
 
-      # 5️⃣ Build & push login-be image
-      - name: Build & push login-be image
-        run: |
-          docker build -t shinojl4dx/login-be:$SHA_TAG ./login-be
-          docker push shinojl4dx/login-be:$SHA_TAG
-
-      # 6️⃣ Clone CD repository
+      # 6️⃣ Clone CD repo
       - name: Clone CD repository
-        env:
-          GITOPS_REPO_TOKEN: ${{ secrets.GITOPS_REPO_TOKEN }}
         run: |
-          rm -rf $CD_DIR
-          git clone https://x-access-token:${GITOPS_REPO_TOKEN}@github.com/shinojl4dx/ticket-CD.git $CD_DIR
+          git clone $CD_REPO $CD_DIR
           cd $CD_DIR
-          git checkout main
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
+          git config user.email "ci-bot@example.com"
+          git config user.name "CI Bot"
 
-      # 7️⃣ Verify files exist
-      - name: List files in CD repo
-        run: |
-          ls -l $CD_DIR
-
-      # 8️⃣ Update deployment manifests with SHA tags
+      # 7️⃣ Update manifests with new SHA tag
       - name: Update manifests with SHA tag
         run: |
           cd $CD_DIR
-          if [ ! -f frontend-deployment.yaml ]; then echo "❌ frontend-deployment.yaml not found"; exit 1; fi
-          if [ ! -f login-be-deployment.yaml ]; then echo "❌ login-be-deployment.yaml not found"; exit 1; fi
+          if [ ! -f frontend.yaml ]; then echo "❌ frontend.yaml not found"; exit 1; fi
+          if [ ! -f backend.yaml ]; then echo "❌ backend.yaml not found"; exit 1; fi
+          sed -i "s|shinojl4dx/frontend:.*|shinojl4dx/frontend:${SHA_TAG}|g" frontend.yaml
+          sed -i "s|shinojl4dx/login-be:.*|shinojl4dx/login-be:${SHA_TAG}|g" backend.yaml
 
-          sed -i "s|shinojl4dx/frontend:.*|shinojl4dx/frontend:$SHA_TAG|g" frontend-deployment.yaml
-          sed -i "s|shinojl4dx/login-be:.*|shinojl4dx/login-be:$SHA_TAG|g" login-be-deployment.yaml
-
-      # 9️⃣ Commit & push updated manifests
-      - name: Commit and push changes
+      # 8️⃣ Commit and push updated manifests
+      - name: Commit and Push Changes to CD Repo
         run: |
           cd $CD_DIR
-          git add frontend-deployment.yaml login-be-deployment.yaml
-          git commit -m "Update images to $SHA_TAG"
+          git add frontend.yaml backend.yaml
+          git commit -m "Update images to ${SHA_TAG} [ci skip]" || echo "No changes to commit"
           git push origin main
