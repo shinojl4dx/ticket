@@ -9,18 +9,15 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      # -------- Checkout source --------
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # -------- Docker Hub Login --------
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # -------- Build & Push Frontend --------
       - name: Build and push Frontend image
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest ./frontend
@@ -28,7 +25,6 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${GITHUB_SHA}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${GITHUB_SHA}
 
-      # -------- Build & Push Backend --------
       - name: Build and push Backend image
         run: |
           docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/login-be:latest ./login-be
@@ -39,7 +35,6 @@ jobs:
       - name: Show completion message
         run: echo "✅ Docker images pushed successfully."
 
-      # -------- Update GitOps Manifests --------
       - name: Update ArgoCD GitOps manifests
         run: |
           echo "🔄 Updating GitOps manifests with new Docker image tags..."
@@ -49,7 +44,7 @@ jobs:
           git clone https://github.com/shinojl4dx/ticket-CD.git /tmp/gitops
           cd /tmp/gitops/apps/ticket-app
 
-          # Overwrite backend deployment
+          # Backend deployment
           cat > backend-deployment.yaml <<EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -64,7 +59,7 @@ spec:
           image: docker.io/$DOCKERHUB_USERNAME/login-be:$GIT_SHA
 EOF
 
-          # Overwrite frontend deployment
+          # Frontend deployment
           cat > frontend-deployment.yaml <<EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -79,7 +74,6 @@ spec:
           image: docker.io/$DOCKERHUB_USERNAME/frontend:$GIT_SHA
 EOF
 
-          # Commit & push changes
           git config user.email "github-actions@github.com"
           git config user.name "github-actions"
           git add .
