@@ -1,77 +1,44 @@
-name: CI Build, Push, and Deploy via ArgoCD
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      # -------- Checkout source --------
+
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # -------- Set up Docker Buildx --------
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Set DockerHub secrets
+        run: echo "DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
+        shell: bash
 
-      # -------- Docker Hub Login --------
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # -------- Build & Push Frontend --------
-      - name: Build and push Frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ github.sha }}
-
-      # -------- Build & Push Backend --------
-      - name: Build and push Backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./login-be
-          file: ./login-be/Dockerfile
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/login-be:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/login-be:${{ github.sha }}
-
-      # -------- Completion message --------
-      - name: Show completion message
-        run: echo "✅ Both Docker images pushed successfully."
-
-      # -------- Update ArgoCD GitOps Manifests --------
-      - name: Update ArgoCD GitOps manifests
+      - name: Build & Push Docker Images
         run: |
-          echo "🔄 Updating ArgoCD GitOps manifests with new image tags..."
+          chmod +x ./build-and-push.sh
+          ./build-and-push.sh
 
-          # Clone GitOps repo
+      - name: Update GitOps repo manifests
+        run: |
+          GIT_SHA=${GITHUB_SHA}
           git clone https://github.com/shinojl4dx/ticket-CD.git /tmp/gitops
           cd /tmp/gitops/apps/ticket-app
 
-          echo "📝 Updating backend and frontend image tags..."
-          sed -i "s#image: .*/login-be:.*#image: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/login-be:${GITHUB_SHA}#g" k8s/deployment.yaml
-          sed -i "s#image: .*/frontend:.*#image: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/frontend:${GITHUB_SHA}#g" k8s/frontend-deployment.yaml
+          # Update backend image
+          sed -i "s#image: .*/login-be:.*#image: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/login-be:$GIT_SHA#g" backend-deployment.yaml
 
-          echo "🚀 Committing updated manifests..."
+          # Update frontend image
+          sed -i "s#image: .*/frontend:.*#image: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/frontend:$GIT_SHA#g" frontend-deployment.yaml
+
+          # Commit & push
           git config user.email "github-actions@github.com"
           git config user.name "github-actions"
           git add .
-          git commit -m "Update Docker images to ${GITHUB_SHA}" || echo "No changes to commit"
+          git commit -m "Update Docker images to $GIT_SHA" || echo "No changes to commit"
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/shinojl4dx/ticket-CD.git HEAD:main
 
-          echo "✅ ArgoCD will detect the change and deploy automatically."
-
-      # -------- Final Completion --------
-      - name: Final message
-        run: echo "🎉 CI/CD pipeline complete. ArgoCD deployment triggered."
+      - name: Done
+        run: echo "✅ CI/CD complete. ArgoCD will deploy automatically."
