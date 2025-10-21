@@ -71,6 +71,6 @@ jobs:
       - name: Commit and Push Changes to CD Repo
         run: |
           cd $CD_DIR
-          git add k86/frontend.yaml k86/backend.yaml
+          git add apps/ticket-app/frontend.yaml apps/ticket-app/backend.yaml
           git commit -m "Update images to ${SHA_TAG} [ci skip]" || echo "No changes to commit"
           git push origin main
