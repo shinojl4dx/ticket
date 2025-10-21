@@ -53,10 +53,10 @@ jobs:
           git config user.name "CI Bot"
 
       # 7️⃣ Copy updated manifests from CI to CD repo
-      - name: Copy Kubernetes manifests to CD Repo
+      - name: Copy Kubernetes manifests to CD Repo (apps/ticket-app path)
         run: |
-          mkdir -p $CD_DIR/k86
-          cp -r k86/*.yaml $CD_DIR/k86/
+          mkdir -p $CD_DIR/apps/ticket-app
+          cp -r k86/*.yaml $CD_DIR/apps/ticket-app/
 
       # 8️⃣ Update manifests with new SHA tag
       - name: Update manifests with SHA tag
