@@ -7,7 +7,7 @@ on:
 
 env:
   CI_REPO: https://github.com/shinojl4dx/ticket-CI.git
-  CD_REPO: https://github.com/shinojl4dx/ticket-CD.git
+  CD_REPO: https://${{ secrets.GITOPS_REPO_TOKEN }}@github.com/shinojl4dx/ticket-CD.git
   CD_DIR: /tmp/gitops
 
 jobs:
@@ -19,45 +19,47 @@ jobs:
       - name: Checkout CI repository
         uses: actions/checkout@v3
 
-      # 2️⃣ Set SHA tag
+      # 2️⃣ Set SHA_TAG
       - name: Set SHA_TAG
         id: vars
         run: echo "SHA_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
-      # 3️⃣ Log in to Docker Hub
+      # 3️⃣ Docker Login
       - name: Docker Login
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 4️⃣ Build and push frontend image
+      # 4️⃣ Build and Push Frontend Image
       - name: Build and Push Frontend Image
         run: |
           docker build -t shinojl4dx/frontend:${SHA_TAG} ./frontend
           docker push shinojl4dx/frontend:${SHA_TAG}
 
-      # 5️⃣ Build and push login-be image
+      # 5️⃣ Build and Push Backend Image
       - name: Build and Push Login-BE Image
         run: |
           docker build -t shinojl4dx/login-be:${SHA_TAG} ./login-be
           docker push shinojl4dx/login-be:${SHA_TAG}
 
-      # 6️⃣ Clone CD repo
+      # 6️⃣ Clone CD Repo with Auth Token
       - name: Clone CD repository
         run: |
           git clone $CD_REPO $CD_DIR
           cd $CD_DIR
           git config user.email "ci-bot@example.com"
           git config user.name "CI Bot"
+          # Reset remote to clean URL for logs
+          git remote set-url origin https://github.com/shinojl4dx/ticket-CD.git
 
-      # 7️⃣ Copy updated manifests from CI to CD repo
+      # 7️⃣ Copy Kubernetes manifests from CI to CD repo
       - name: Copy Kubernetes manifests to CD Repo
         run: |
           mkdir -p $CD_DIR/k86
           cp -r k86/*.yaml $CD_DIR/k86/
 
-      # 8️⃣ Update manifests with new SHA tag
+      # 8️⃣ Update image tags in manifests
       - name: Update manifests with SHA tag
         run: |
           cd $CD_DIR/k86
@@ -66,7 +68,7 @@ jobs:
           sed -i "s|shinojl4dx/frontend:.*|shinojl4dx/frontend:${SHA_TAG}|g" frontend.yaml
           sed -i "s|shinojl4dx/login-be:.*|shinojl4dx/login-be:${SHA_TAG}|g" backend.yaml
 
-      # 9️⃣ Commit and push updated manifests
+      # 9️⃣ Commit and Push to CD Repo
       - name: Commit and Push Changes to CD Repo
         run: |
           cd $CD_DIR
