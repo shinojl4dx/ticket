@@ -9,6 +9,7 @@ env:
   CI_REPO: https://github.com/shinojl4dx/ticket-CI.git
   CD_REPO: https://${{ secrets.GITOPS_REPO_TOKEN }}@github.com/shinojl4dx/ticket-CD.git
   CD_DIR: /tmp/gitops
+  # Env corrected
 
 jobs:
   build-and-deploy:
