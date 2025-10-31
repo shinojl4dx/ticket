@@ -1,10 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>L4DX | Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://kit.fontawesome.com/a2d9d6a64b.js" crossorigin="anonymous"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #0a0f24, #101d3f);
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+
+    h2 {
+      font-weight: 400;
+      font-size: 1.2rem;
+      opacity: 0.85;
+      margin-bottom: 40px;
+    }
+
+    .cards {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 30px;
+      max-width: 900px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 30px;
+      width: 180px;
+      text-align: center;
+      transition: all 0.3s ease-in-out;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .card:hover {
+      transform: translateY(-10px) scale(1.05);
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 0 25px rgba(0, 191, 255, 0.5);
+    }
+
+    .card i {
+      font-size: 40px;
+      margin-bottom: 15px;
+      color: #00b4d8;
+    }
+
+    footer {
+      position: absolute;
+      bottom: 20px;
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+
+    .glow {
+      position: absolute;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(0,150,255,0.3) 0%, transparent 70%);
+      filter: blur(60px);
+      z-index: 0;
+      animation: float 10s infinite ease-in-out alternate;
+    }
+
+    @keyframes float {
+      0% { transform: translate(-200px, -100px); }
+      100% { transform: translate(200px, 100px); }
+    }
+  </style>
 </head>
 <body>
-  <h1>Welcome to the Dashboard!</h1>
+  <div class="glow"></div>
+
+  <h1>Welcome to the L4DX Portal 🚀</h1>
+  <h2>Empower your journey — Learn, Experiment, and Master DevOps.</h2>
+
+  <div class="cards">
+    <div class="card">
+      <i class="fas fa-laptop-code"></i>
+      <h3>Learning</h3>
+      <p>Dive into real-world hands-on labs and gain true experience.</p>
+    </div>
+    <div class="card">
+      <i class="fas fa-lightbulb"></i>
+      <h3>Motivation</h3>
+      <p>Keep experimenting — every failure brings you closer to mastery.</p>
+    </div>
+    <div class="card">
+      <i class="fab fa-docker"></i>
+      <h3>DevOps</h3>
+      <p>Integrate, deploy, and automate using the latest tools and practices.</p>
+    </div>
+    <div class="card">
+      <i class="fas fa-network-wired"></i>
+      <h3>Kubernetes</h3>
+      <p>Orchestrate and scale your containers like a pro.</p>
+    </div>
+    <div class="card">
+      <i class="fas fa-cloud"></i>
+      <h3>Cloud Skills</h3>
+      <p>Build scalable cloud-native apps on AWS, Azure, or GCP.</p>
+    </div>
+  </div>
+
+  <footer>© 2025 L4DX – Lab for Digital Experiments</footer>
 </body>
 </html>
-
