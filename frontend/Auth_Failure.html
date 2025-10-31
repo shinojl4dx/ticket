@@ -1,9 +1,111 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Auth Failure</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>L4DX | Authentication Failed</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://kit.fontawesome.com/a2d9d6a64b.js" crossorigin="anonymous"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #0a0f24, #101d3f);
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .error-box {
+      background: rgba(255, 0, 0, 0.1);
+      border: 1px solid rgba(255, 80, 80, 0.4);
+      backdrop-filter: blur(12px);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 0 25px rgba(255, 0, 0, 0.3);
+      width: 80%;
+      max-width: 400px;
+      animation: fadeIn 1s ease-in-out;
+    }
+
+    .error-box i {
+      font-size: 60px;
+      color: #ff4c4c;
+      margin-bottom: 15px;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+
+    p {
+      font-size: 1rem;
+      opacity: 0.8;
+      margin-bottom: 30px;
+    }
+
+    button {
+      background: linear-gradient(90deg, #007bff, #00b4d8);
+      border: none;
+      color: #fff;
+      padding: 10px 25px;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: linear-gradient(90deg, #00b4d8, #007bff);
+      transform: scale(1.05);
+    }
+
+    .glow {
+      position: absolute;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(255,0,0,0.2) 0%, transparent 70%);
+      filter: blur(60px);
+      z-index: 0;
+      animation: float 8s infinite ease-in-out alternate;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes float {
+      0% { transform: translate(-150px, -100px); }
+      100% { transform: translate(150px, 100px); }
+    }
+
+    footer {
+      position: absolute;
+      bottom: 20px;
+      font-size: 0.9rem;
+      opacity: 0.7;
+    }
+  </style>
 </head>
 <body>
-  <h1>Login Failed! Invalid credentials.</h1>
+  <div class="glow"></div>
+
+  <div class="error-box">
+    <i class="fas fa-exclamation-triangle"></i>
+    <h1>Authentication Failed!</h1>
+    <p>Invalid username or password. Please try again.</p>
+    <button onclick="window.location.href='Login.html'">Go Back to Login</button>
+  </div>
+
+  <footer>© 2025 L4DX – Lab for Digital Experiments</footer>
 </body>
 </html>
